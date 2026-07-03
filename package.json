@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@kobalte/core": "^0.13.7",
+    "lucide-solid": "^1.23.0",
     "solid-js": "^1.8.15"
   },
   "devDependencies": {

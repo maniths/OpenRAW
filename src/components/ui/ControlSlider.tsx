@@ -27,8 +27,9 @@ export const ControlSlider: Component<ControlSliderProps> = (props) => {
       </div>
       
       <Slider.Track class="relative flex-1 h-1 bg-border rounded-full">
-        <Slider.Fill class="absolute h-full bg-accent rounded-full" />
-        <Slider.Thumb class="block w-2.5 h-2.5 -mt-[3px] bg-primary rounded-full cursor-pointer hover:bg-white focus:outline-none focus:ring-1 focus:ring-accent" />
+        {/* Changed bg-accent to bg-primary for a monochromatic aesthetic */}
+        <Slider.Fill class="absolute h-full bg-primary rounded-full" />
+        <Slider.Thumb class="block w-2.5 h-2.5 -mt-[3px] bg-white rounded-full cursor-pointer hover:scale-110 transition-transform focus:outline-none" />
       </Slider.Track>
       
       <input
@@ -38,7 +39,7 @@ export const ControlSlider: Component<ControlSliderProps> = (props) => {
         max={props.max}
         step={props.step}
         onChange={(e) => props.onChange(parseFloat(e.currentTarget.value))}
-        class="w-12 bg-input text-primary text-[12px] text-center rounded border border-border outline-none focus:border-accent shrink-0 py-0.5 m-0"
+        class="w-12 bg-input text-primary text-[12px] text-center rounded border border-border outline-none focus:border-primary shrink-0 py-0.5 m-0"
       />
     </Slider.Root>
   );

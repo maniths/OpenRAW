@@ -1,21 +1,23 @@
 import { Component } from 'solid-js';
 import { Collapsible } from '@kobalte/core';
+import { ChevronRight } from 'lucide-solid';
 import { ControlSlider } from '../ui/ControlSlider';
 import { settings, setSettings } from '../../store/settings';
 
 export const BasicsPanel: Component = () => {
   return (
     <Collapsible.Root class="border-b border-border" defaultOpen={true}>
-      <Collapsible.Trigger class="w-full flex items-center justify-between p-3 bg-panel hover:text-accent transition-colors cursor-pointer outline-none">
+      {/* Group class added to capture the data-expanded state from Kobalte */}
+      <Collapsible.Trigger class="group w-full flex items-center justify-between p-3 bg-panel hover:text-primary transition-colors cursor-pointer outline-none">
         <span class="text-[14px] text-primary capitalize font-medium">Basics</span>
-        <span class="text-[12px] text-icon">▼</span>
+        <ChevronRight size={16} class="text-icon transition-transform duration-200 group-data-[expanded]:rotate-90" />
       </Collapsible.Trigger>
       
       <Collapsible.Content class="px-3 pb-4 space-y-4">
         {/* White Balance Section */}
         <div class="space-y-1">
           <div class="text-[10px] uppercase text-icon mb-2 tracking-wider">White Balance</div>
-          <select class="w-full bg-input text-primary text-[12px] border border-border rounded px-2 py-1 mb-2 outline-none focus:border-accent">
+          <select class="w-full bg-input text-primary text-[12px] border border-border rounded px-2 py-1 mb-2 outline-none focus:border-primary">
             <option>As Shot</option>
             <option>Auto</option>
             <option>Daylight</option>
