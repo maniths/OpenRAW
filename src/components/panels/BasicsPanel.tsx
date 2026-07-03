@@ -23,7 +23,8 @@ export const BasicsPanel: Component = () => {
             <option>Cloudy</option>
             <option>Shade</option>
           </select>
-          <ControlSlider label="Temp" value={settings.temperature} min={2000} max={50000} step={50} onChange={(v) => setSettings('temperature', v)} />
+          {/* Updated Range: 800 to 14000 to match professional thresholds */}
+          <ControlSlider label="Temp" value={settings.temperature} min={800} max={14000} step={10} onChange={(v) => setSettings('temperature', v)} />
           <ControlSlider label="Tint" value={settings.tint} min={-150} max={150} step={1} onChange={(v) => setSettings('tint', v)} />
         </div>
 
@@ -32,9 +33,7 @@ export const BasicsPanel: Component = () => {
         {/* Tone Section */}
         <div class="space-y-1">
           <div class="text-[10px] uppercase text-icon mb-2 tracking-wider">Tone</div>
-          {/* Updated Exposure limits to match Capture One (-4 to 4) */}
           <ControlSlider label="Exposure" value={settings.exposure} min={-4} max={4} step={0.05} onChange={(v) => setSettings('exposure', v)} />
-          {/* Updated Contrast limits to match Capture One (-50 to 50) */}
           <ControlSlider label="Contrast" value={settings.contrast} min={-50} max={50} step={1} onChange={(v) => setSettings('contrast', v)} />
           <ControlSlider label="Highlights" value={settings.highlights} min={-100} max={100} step={1} onChange={(v) => setSettings('highlights', v)} />
           <ControlSlider label="Shadows" value={settings.shadows} min={-100} max={100} step={1} onChange={(v) => setSettings('shadows', v)} />

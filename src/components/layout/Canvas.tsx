@@ -17,7 +17,6 @@ export const Canvas: Component = () => {
       await renderer.init();
       setIsGpuReady(true);
 
-      // Listen for imported images
       pipeline.onImageLoaded((bitmap) => {
         renderer.setImage(bitmap);
       });
@@ -36,12 +35,8 @@ export const Canvas: Component = () => {
 
   createEffect(() => {
     if (isGpuReady()) {
-      renderer.updateSettings(
-        settings.exposure,
-        settings.contrast,
-        settings.temperature,
-        settings.tint
-      );
+      // Pass the entire store object
+      renderer.updateSettings(settings);
     }
   });
 

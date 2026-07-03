@@ -15,8 +15,8 @@ export class WebGPURenderer {
   public initialized: boolean = false;
   private renderPending: boolean = false;
   
-  // State for Uniforms
-  private currentSettings = new Float32Array([0, 0, 5500, 0]);
+  // State for Uniforms (16 floats = 64 bytes)
+  private uniformsData = new Float32Array(16);
   private imageAspect: number = 1.0;
   private canvasAspect: number = 1.0;
 
@@ -41,9 +41,9 @@ export class WebGPURenderer {
   }
 
   private setupResources() {
-    // 32 bytes: 8 floats (exposure, contrast, temp, tint, imgAspect, canAspect, pad1, pad2)
+    // 64 bytes: 16 floats to hold all slider values and aspect ratios
     this.uniformBuffer = this.device.createBuffer({
-      size: 32,
+      size: 64, 
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -54,7 +54,6 @@ export class WebGPURenderer {
       addressModeV: 'clamp-to-edge',
     });
 
-    // Create a 1x1 default texture (Canvas BG color) before an image is loaded
     this.texture = this.device.createTexture({
       size: [1, 1, 1],
       format: 'rgba8unorm',
@@ -63,7 +62,7 @@ export class WebGPURenderer {
     
     this.device.queue.writeTexture(
       { texture: this.texture },
-      new Uint8Array([25, 25, 25, 255]), // #191919
+      new Uint8Array([25, 25, 25, 255]),
       { bytesPerRow: 4 },
       [1, 1, 1]
     );
@@ -98,7 +97,6 @@ export class WebGPURenderer {
   public setImage(bitmap: ImageBitmap) {
     if (!this.initialized) return;
 
-    // Destroy old texture to free VRAM
     if (this.texture) this.texture.destroy();
 
     this.texture = this.device.createTexture({
@@ -118,11 +116,15 @@ export class WebGPURenderer {
     this.updateUniforms();
   }
 
-  public updateSettings(exposure: number, contrast: number, temp: number, tint: number) {
-    this.currentSettings[0] = exposure;
-    this.currentSettings[1] = contrast;
-    this.currentSettings[2] = temp;
-    this.currentSettings[3] = tint;
+  // Accept all settings at once
+  public updateSettings(settings: any) {
+    this.uniformsData[0] = settings.exposure;
+    this.uniformsData[1] = settings.contrast;
+    this.uniformsData[2] = settings.temperature;
+    this.uniformsData[3] = settings.tint;
+    this.uniformsData[4] = settings.saturation;
+    this.uniformsData[5] = settings.vibrance;
+    // Slots 6-10 reserved for highlights/shadows/etc later
     this.updateUniforms();
   }
 
@@ -137,11 +139,12 @@ export class WebGPURenderer {
 
   private updateUniforms() {
     if (!this.initialized) return;
-    const uniformsData = new Float32Array([
-      this.currentSettings[0], this.currentSettings[1], this.currentSettings[2], this.currentSettings[3],
-      this.imageAspect, this.canvasAspect, 0, 0
-    ]);
-    this.device.queue.writeBuffer(this.uniformBuffer, 0, uniformsData);
+    
+    // Pack layout-dependent variables at the end
+    this.uniformsData[11] = this.imageAspect;
+    this.uniformsData[12] = this.canvasAspect;
+
+    this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformsData);
     this.scheduleRender();
   }
 
