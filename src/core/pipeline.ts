@@ -1,25 +1,24 @@
-// Note the "?worker" suffix - this tells Vite to bundle this as a Web Worker
-import DecoderWorker from './decoder.worker?worker';
+type PipelineCallback = (bitmap: ImageBitmap) => void;
 
 class ImagePipeline {
-  private worker: Worker;
+  private listeners: PipelineCallback[] = [];
 
-  constructor() {
-    this.worker = new DecoderWorker();
-    
-    this.worker.onmessage = (e) => {
-      if (e.data.type === 'DECODE_SUCCESS') {
-        const { width, height, buffer } = e.data;
-        console.log(`[Main Thread] Received ${width}x${height} buffer. Size: ${ (buffer.byteLength / 1024 / 1024).toFixed(2) } MB`);
-        
-        // Next Step: Send this buffer directly to the WebGPU Texture!
-      }
-    };
+  public onImageLoaded(cb: PipelineCallback) {
+    this.listeners.push(cb);
   }
 
-  public loadRawFile(file: File) {
-    // Send the file to the worker
-    this.worker.postMessage({ file });
+  public async loadRawFile(file: File) {
+    console.log(`[Pipeline] Loading file: ${file.name}`);
+    try {
+      // Temporarily using native browser decoding for JPG/PNG testing.
+      // We will replace this with our C++/LibRAW WASM worker for actual RAWs later.
+      const bitmap = await createImageBitmap(file);
+      console.log(`[Pipeline] Decoded: ${bitmap.width}x${bitmap.height}`);
+      
+      this.listeners.forEach(cb => cb(bitmap));
+    } catch (err) {
+      console.error("[Pipeline] Failed to decode image:", err);
+    }
   }
 }
 

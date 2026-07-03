@@ -7,7 +7,6 @@ import { settings, setSettings } from '../../store/settings';
 export const BasicsPanel: Component = () => {
   return (
     <Collapsible.Root class="border-b border-border" defaultOpen={true}>
-      {/* Group class added to capture the data-expanded state from Kobalte */}
       <Collapsible.Trigger class="group w-full flex items-center justify-between p-3 bg-panel hover:text-primary transition-colors cursor-pointer outline-none">
         <span class="text-[14px] text-primary capitalize font-medium">Basics</span>
         <ChevronRight size={16} class="text-icon transition-transform duration-200 group-data-[expanded]:rotate-90" />
@@ -33,8 +32,10 @@ export const BasicsPanel: Component = () => {
         {/* Tone Section */}
         <div class="space-y-1">
           <div class="text-[10px] uppercase text-icon mb-2 tracking-wider">Tone</div>
-          <ControlSlider label="Exposure" value={settings.exposure} min={-5} max={5} step={0.05} onChange={(v) => setSettings('exposure', v)} />
-          <ControlSlider label="Contrast" value={settings.contrast} min={-100} max={100} step={1} onChange={(v) => setSettings('contrast', v)} />
+          {/* Updated Exposure limits to match Capture One (-4 to 4) */}
+          <ControlSlider label="Exposure" value={settings.exposure} min={-4} max={4} step={0.05} onChange={(v) => setSettings('exposure', v)} />
+          {/* Updated Contrast limits to match Capture One (-50 to 50) */}
+          <ControlSlider label="Contrast" value={settings.contrast} min={-50} max={50} step={1} onChange={(v) => setSettings('contrast', v)} />
           <ControlSlider label="Highlights" value={settings.highlights} min={-100} max={100} step={1} onChange={(v) => setSettings('highlights', v)} />
           <ControlSlider label="Shadows" value={settings.shadows} min={-100} max={100} step={1} onChange={(v) => setSettings('shadows', v)} />
           <ControlSlider label="Whites" value={settings.whites} min={-100} max={100} step={1} onChange={(v) => setSettings('whites', v)} />

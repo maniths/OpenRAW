@@ -1,6 +1,7 @@
 import { Component, onMount, onCleanup, createEffect, createSignal } from 'solid-js';
 import { WebGPURenderer } from '../../core/renderer';
 import { settings } from '../../store/settings';
+import { pipeline } from '../../core/pipeline';
 
 export const Canvas: Component = () => {
   let canvasRef!: HTMLCanvasElement;
@@ -8,15 +9,18 @@ export const Canvas: Component = () => {
   let renderer: WebGPURenderer;
   let resizeObserver: ResizeObserver;
   
-  // Explicitly track when WebGPU has finished async setup
   const [isGpuReady, setIsGpuReady] = createSignal(false);
 
   onMount(async () => {
     try {
       renderer = new WebGPURenderer(canvasRef);
       await renderer.init();
-      
-      setIsGpuReady(true); // Unlock UI binding
+      setIsGpuReady(true);
+
+      // Listen for imported images
+      pipeline.onImageLoaded((bitmap) => {
+        renderer.setImage(bitmap);
+      });
 
       resizeObserver = new ResizeObserver((entries) => {
         for (let entry of entries) {
@@ -30,7 +34,6 @@ export const Canvas: Component = () => {
     }
   });
 
-  // This will now perfectly track settings changes and fire accurately
   createEffect(() => {
     if (isGpuReady()) {
       renderer.updateSettings(
