@@ -1,24 +1,9 @@
 export const basicShader = `
 struct Uniforms {
-  exposure: f32,
-  contrast: f32,
-  temperature: f32,
-  tint: f32,
-  
-  saturation: f32,
-  vibrance: f32,
-  highlights: f32,
-  shadows: f32,
-  
-  uvScaleX: f32,
-  uvScaleY: f32,
-  uvOffsetX: f32,
-  uvOffsetY: f32,
-  
-  pad1: f32,
-  pad2: f32,
-  pad3: f32,
-  pad4: f32,
+  exposure: f32, contrast: f32, temperature: f32, tint: f32,
+  saturation: f32, vibrance: f32, highlights: f32, shadows: f32,
+  uvScaleX: f32, uvScaleY: f32, uvOffsetX: f32, uvOffsetY: f32,
+  pad1: f32, pad2: f32, pad3: f32, pad4: f32,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -44,7 +29,6 @@ fn vs_main(@builtin(vertex_index) VertexIndex : u32) -> VertexOutput {
   var screenUv = pos[VertexIndex] * 0.5 + 0.5;
   screenUv.y = 1.0 - screenUv.y;
   
-  // Transform Screen Coordinates directly into Image Texture Coordinates (The Magic)
   output.uv = vec2<f32>(
     screenUv.x * uniforms.uvScaleX + uniforms.uvOffsetX,
     screenUv.y * uniforms.uvScaleY + uniforms.uvOffsetY
@@ -57,15 +41,14 @@ const LUMA = vec3<f32>(0.2126, 0.7152, 0.0722);
 
 @fragment
 fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
-  // 1. Sample the texture FIRST to guarantee uniform control flow for the GPU
   var color = textureSample(myTexture, mySampler, in.uv).rgb;
 
-  // 2. NOW check bounds. If the transformed UV is outside the image bounds, render the dark canvas background
+  // IMPORTANT FIX: Return a transparent pixel for out of bounds
+  // This allows the DOM wrapper's background color (#191919, #FFFFFF, etc.) to show through seamlessly!
   if (in.uv.x < 0.0 || in.uv.x > 1.0 || in.uv.y < 0.0 || in.uv.y > 1.0) {
-    return vec4<f32>(0.098, 0.098, 0.098, 1.0);
+    return vec4<f32>(0.0, 0.0, 0.0, 0.0);
   }
   
-  // 3. Continue with color processing...
   var linearColor = pow(color, vec3<f32>(2.2));
   
   let t = uniforms.temperature;

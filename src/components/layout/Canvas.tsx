@@ -1,10 +1,10 @@
-import { Component, onMount, onCleanup, createEffect, createSignal } from 'solid-js';
+import { Component, onMount, onCleanup, createEffect, createSignal, For } from 'solid-js';
 import { WebGPURenderer } from '../../core/renderer';
 import { settings } from '../../store/settings';
 import { pipeline } from '../../core/pipeline';
 import { ZoomIn, ZoomOut } from 'lucide-solid';
 
-// Smart Filename Truncation (e.g. thisisaextremply...erday.cr3)
+// Smart Filename Truncation
 const formatFilename = (filename: string | null) => {
   if (!filename) return "No image loaded";
   
@@ -43,6 +43,8 @@ export const Canvas: Component = () => {
   const [pan, setPan] = createSignal({ x: 0, y: 0 });
 
   const [isDragging, setIsDragging] = createSignal(false);
+  const [canvasBg, setCanvasBg] = createSignal('#191919'); // Default canvas background color
+  
   let lastMouse = { x: 0, y: 0 };
 
   const getFitPercent = () => {
@@ -147,7 +149,9 @@ export const Canvas: Component = () => {
     const zoomFactor = e.ctrlKey ? 0.01 : 0.003; 
     let targetScale = oldScale * (1 - e.deltaY * zoomFactor);
 
-    if (targetScale <= getFitPercent() / 100 + 0.01) {
+    // FIXED: By changing the threshold exactly to the fit scale without an added margin, 
+    // smooth trackpads can now easily "escape" the 0 zoom state and trigger scaling!
+    if (targetScale <= getFitPercent() / 100) {
       setZoom(0); setPan({ x: 0, y: 0 });
       return;
     }
@@ -188,32 +192,32 @@ export const Canvas: Component = () => {
   return (
     <main class="flex flex-col flex-1 relative bg-canvas overflow-hidden">
       
-      {/* Thin Top Navbar */}
-      <div class="h-10 border-b border-border bg-panel flex items-center justify-between px-4 shrink-0 z-20">
+      {/* Thin Top Navbar - 1.5rem */}
+      <div class="h-6 min-h-[1.5rem] max-h-[1.5rem] border-b border-border bg-panel flex items-center px-4 shrink-0 z-20">
         <div class="flex-1"></div>
-        <div class="flex items-center gap-3">
-          <span class="text-[11px] text-icon font-medium mr-1 w-12 text-right select-none">
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] text-icon font-medium mr-1 w-8 text-right select-none">
             {zoom() === 0 ? "Fit" : `${Math.round(zoom())}%`}
           </span>
           <button class="text-icon hover:text-primary transition-colors focus:outline-none" onClick={handleZoomOut}>
-            <ZoomOut size={16}/>
+            <ZoomOut size={14}/>
           </button>
           <input 
             type="range" 
             min={getFitPercent()} 
             max="1600" step="1" 
-            class="w-32 accent-primary cursor-pointer" 
+            class="w-24 h-1 bg-border rounded-lg appearance-none cursor-pointer outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary" 
             value={zoom() === 0 ? getFitPercent() : zoom()} 
             onInput={handleSliderChange} 
           />
           <button class="text-icon hover:text-primary transition-colors focus:outline-none" onClick={handleZoomIn}>
-            <ZoomIn size={16}/>
+            <ZoomIn size={14}/>
           </button>
         </div>
       </div>
 
-      {/* 5px Canvas Wrapper - min-h-0 and min-w-0 forces flexbox to not stretch past the screen! */}
-      <div class="flex-1 flex p-[5px] overflow-hidden box-border" style={{ "min-height": 0, "min-width": 0 }}>
+      {/* 5px Canvas Wrapper - Dynamically sets the HTML background color from the squares */}
+      <div class="flex-1 flex p-[5px] overflow-hidden box-border transition-colors duration-200" style={{ "min-height": 0, "min-width": 0, "background-color": canvasBg() }}>
         <div 
           ref={viewportRef} 
           class={`flex-1 w-full h-full relative overflow-hidden rounded-sm ${isImageLoaded() ? (zoom() === 0 ? 'cursor-default' : (isDragging() ? 'cursor-grabbing' : 'cursor-grab')) : 'cursor-default'}`}
@@ -230,11 +234,33 @@ export const Canvas: Component = () => {
         </div>
       </div>
 
-      {/* Thin Bottom Navbar - Forced to exactly 1.5rem (h-6) */}
-      <div class="h-6 min-h-[1.5rem] max-h-[1.5rem] border-t border-border bg-panel flex items-center justify-center px-4 shrink-0 z-20 box-border">
-        <span class="text-[11px] text-icon tracking-wide select-none">
-          {formatFilename(fileName())}
-        </span>
+      {/* Thin Bottom Navbar - 1.5rem */}
+      <div class="h-6 min-h-[1.5rem] max-h-[1.5rem] border-t border-border bg-panel flex items-center px-4 shrink-0 z-20 box-border">
+        
+        {/* Left Spacer */}
+        <div class="flex-1"></div>
+        
+        {/* Center - Filename */}
+        <div class="flex items-center justify-center flex-1">
+          <span class="text-[10px] text-icon tracking-wide select-none">
+            {formatFilename(fileName())}
+          </span>
+        </div>
+
+        {/* Right - Color Swatches */}
+        <div class="flex-1 flex justify-end items-center gap-1.5">
+          <For each={['#191919', '#393939', '#9C9C9C', '#FFFFFF']}>
+            {(color) => (
+              <button 
+                onClick={() => setCanvasBg(color)} 
+                class={`w-3 h-3 rounded-sm border ${canvasBg() === color ? 'border-primary ring-1 ring-primary/30' : 'border-black/30 hover:border-black/50'} shadow-sm transition-all focus:outline-none`} 
+                style={{ "background-color": color }} 
+                title={`Set background to ${color}`}
+              />
+            )}
+          </For>
+        </div>
+
       </div>
 
     </main>
