@@ -15,10 +15,7 @@ export class WebGPURenderer {
   public initialized: boolean = false;
   private renderPending: boolean = false;
   
-  // State for Uniforms (16 floats = 64 bytes)
   private uniformsData = new Float32Array(16);
-  private imageAspect: number = 1.0;
-  private canvasAspect: number = 1.0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -41,7 +38,6 @@ export class WebGPURenderer {
   }
 
   private setupResources() {
-    // 64 bytes: 16 floats to hold all slider values and aspect ratios
     this.uniformBuffer = this.device.createBuffer({
       size: 64, 
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -96,7 +92,6 @@ export class WebGPURenderer {
 
   public setImage(bitmap: ImageBitmap) {
     if (!this.initialized) return;
-
     if (this.texture) this.texture.destroy();
 
     this.texture = this.device.createTexture({
@@ -111,12 +106,9 @@ export class WebGPURenderer {
       [bitmap.width, bitmap.height]
     );
 
-    this.imageAspect = bitmap.width / bitmap.height;
     this.updateBindGroup();
-    this.updateUniforms();
   }
 
-  // Accept all settings at once
   public updateSettings(settings: any) {
     this.uniformsData[0] = settings.exposure;
     this.uniformsData[1] = settings.contrast;
@@ -129,22 +121,26 @@ export class WebGPURenderer {
     this.updateUniforms();
   }
 
+  // Pure Matrix Injection - Zero DOM scaling involved!
+  public updateTransform(scaleX: number, scaleY: number, offsetX: number, offsetY: number) {
+    if (!this.initialized) return;
+    this.uniformsData[8] = scaleX;
+    this.uniformsData[9] = scaleY;
+    this.uniformsData[10] = offsetX;
+    this.uniformsData[11] = offsetY;
+    this.updateUniforms();
+  }
+
   public resize(width: number, height: number) {
     if (!this.initialized) return;
     const dpr = window.devicePixelRatio || 1;
     this.canvas.width = Math.max(1, width * dpr);
     this.canvas.height = Math.max(1, height * dpr);
-    this.canvasAspect = this.canvas.width / this.canvas.height;
-    this.updateUniforms();
+    this.scheduleRender();
   }
 
   private updateUniforms() {
     if (!this.initialized) return;
-    
-    // Aligned to slots 8 and 9 to match the WGSL struct exactly
-    this.uniformsData[8] = this.imageAspect;
-    this.uniformsData[9] = this.canvasAspect;
-
     this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformsData);
     this.scheduleRender();
   }
