@@ -1,45 +1,41 @@
+import { Settings } from '../store/settings';
 import { basicShader } from './shaders';
 
 export class WebGPURenderer {
   private canvas: HTMLCanvasElement;
   private device!: GPUDevice;
   private context!: GPUCanvasContext;
-  private format!: GPUTextureFormat;
   private pipeline!: GPURenderPipeline;
-  
-  private uniformBuffer!: GPUBuffer;
-  private sampler!: GPUSampler;
-  private texture!: GPUTexture;
   private bindGroup!: GPUBindGroup;
-  
-  public initialized: boolean = false;
-  private renderPending: boolean = false;
-  
-  private uniformsData = new Float32Array(16);
+  private uniformBuffer!: GPUBuffer;
+  private texture!: GPUTexture;
+  private sampler!: GPUSampler;
+  private isReady = false;
+
+  private transform = { uvScaleX: 1, uvScaleY: 1, uvOffsetX: 0, uvOffsetY: 0 };
+  private currentSettings: Settings | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
 
   async init() {
-    if (!navigator.gpu) throw new Error("WebGPU is not supported.");
-    const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+    if (!navigator.gpu) throw new Error("WebGPU not supported on this browser.");
+    const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) throw new Error("No appropriate GPUAdapter found.");
-
     this.device = await adapter.requestDevice();
-    this.context = this.canvas.getContext("webgpu") as GPUCanvasContext;
-    this.format = navigator.gpu.getPreferredCanvasFormat();
-    this.context.configure({ device: this.device, format: this.format, alphaMode: "premultiplied" });
+    this.context = this.canvas.getContext('webgpu') as GPUCanvasContext;
 
-    this.setupResources();
-    this.setupPipeline();
-    this.initialized = true;
-    this.scheduleRender();
-  }
+    const format = navigator.gpu.getPreferredCanvasFormat();
+    this.context.configure({
+      device: this.device,
+      format: format,
+      alphaMode: 'premultiplied',
+    });
 
-  private setupResources() {
+    // Increased size to 64 bytes (16 floats) to accommodate whites, blacks, and padding
     this.uniformBuffer = this.device.createBuffer({
-      size: 64, 
+      size: 64,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -50,48 +46,20 @@ export class WebGPURenderer {
       addressModeV: 'clamp-to-edge',
     });
 
-    this.texture = this.device.createTexture({
-      size: [1, 1, 1],
-      format: 'rgba8unorm',
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-    });
-    
-    this.device.queue.writeTexture(
-      { texture: this.texture },
-      new Uint8Array([25, 25, 25, 255]),
-      { bytesPerRow: 4 },
-      [1, 1, 1]
-    );
-  }
-
-  private setupPipeline() {
-    const shaderModule = this.device.createShaderModule({
-      code: basicShader,
-    });
+    const shaderModule = this.device.createShaderModule({ code: basicShader });
 
     this.pipeline = this.device.createRenderPipeline({
       layout: 'auto',
       vertex: { module: shaderModule, entryPoint: 'vs_main' },
-      fragment: { module: shaderModule, entryPoint: 'fs_main', targets: [{ format: this.format }] },
+      fragment: { module: shaderModule, entryPoint: 'fs_main', targets: [{ format }] },
       primitive: { topology: 'triangle-list' },
     });
 
-    this.updateBindGroup();
+    this.isReady = true;
   }
 
-  private updateBindGroup() {
-    this.bindGroup = this.device.createBindGroup({
-      layout: this.pipeline.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: this.uniformBuffer } },
-        { binding: 1, resource: this.sampler },
-        { binding: 2, resource: this.texture.createView() },
-      ],
-    });
-  }
-
-  public setImage(bitmap: ImageBitmap) {
-    if (!this.initialized) return;
+  setImage(bitmap: ImageBitmap) {
+    if (!this.isReady) return;
     if (this.texture) this.texture.destroy();
 
     this.texture = this.device.createTexture({
@@ -106,71 +74,67 @@ export class WebGPURenderer {
       [bitmap.width, bitmap.height]
     );
 
-    this.updateBindGroup();
+    this.bindGroup = this.device.createBindGroup({
+      layout: this.pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuffer } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.texture.createView() },
+      ],
+    });
+
+    this.render();
   }
 
-  public updateSettings(settings: any) {
-    this.uniformsData[0] = settings.exposure;
-    this.uniformsData[1] = settings.contrast;
-    this.uniformsData[2] = settings.temperature;
-    this.uniformsData[3] = settings.tint;
-    this.uniformsData[4] = settings.saturation;
-    this.uniformsData[5] = settings.vibrance;
-    this.uniformsData[6] = settings.highlights;
-    this.uniformsData[7] = settings.shadows;
-    this.updateUniforms();
+  resize(width: number, height: number) {
+    this.canvas.width = width;
+    this.canvas.height = height;
+    this.render();
   }
 
-  // Pure Matrix Injection - Zero DOM scaling involved!
-  public updateTransform(scaleX: number, scaleY: number, offsetX: number, offsetY: number) {
-    if (!this.initialized) return;
-    this.uniformsData[8] = scaleX;
-    this.uniformsData[9] = scaleY;
-    this.uniformsData[10] = offsetX;
-    this.uniformsData[11] = offsetY;
-    this.updateUniforms();
+  updateSettings(settings: Settings) {
+    this.currentSettings = settings;
+    this.writeUniforms();
   }
 
-  public resize(width: number, height: number) {
-    if (!this.initialized) return;
-    const dpr = window.devicePixelRatio || 1;
-    this.canvas.width = Math.max(1, width * dpr);
-    this.canvas.height = Math.max(1, height * dpr);
-    this.scheduleRender();
+  updateTransform(uvScaleX: number, uvScaleY: number, uvOffsetX: number, uvOffsetY: number) {
+    this.transform = { uvScaleX, uvScaleY, uvOffsetX, uvOffsetY };
+    this.writeUniforms();
   }
 
-  private updateUniforms() {
-    if (!this.initialized) return;
-    this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformsData);
-    this.scheduleRender();
+  private writeUniforms() {
+    if (!this.isReady || !this.currentSettings) return;
+
+    const s = this.currentSettings;
+    const t = this.transform;
+
+    const uniformData = new Float32Array([
+      s.exposure, s.contrast, s.temperature, s.tint,
+      s.saturation, s.vibrance, s.highlights, s.shadows,
+      s.whites, s.blacks, t.uvScaleX, t.uvScaleY,
+      t.uvOffsetX, t.uvOffsetY, 0, 0
+    ]);
+
+    this.device.queue.writeBuffer(this.uniformBuffer, 0, uniformData);
+    this.render();
   }
 
-  private scheduleRender() {
-    if (!this.renderPending) {
-      this.renderPending = true;
-      requestAnimationFrame(() => { this.render(); this.renderPending = false; });
-    }
-  }
-
-  private render() {
-    if (!this.initialized || !this.pipeline || !this.bindGroup) return;
+  render() {
+    if (!this.isReady || !this.bindGroup) return;
 
     const commandEncoder = this.device.createCommandEncoder();
-    const textureView = this.context.getCurrentTexture().createView();
-
-    const renderPassDescriptor: GPURenderPassDescriptor = {
+    const passEncoder = commandEncoder.beginRenderPass({
       colorAttachments: [{
-        view: textureView,
-        clearValue: { r: 0.098, g: 0.098, b: 0.098, a: 1.0 },
+        view: this.context.getCurrentTexture().createView(),
+        clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
         loadOp: 'clear',
         storeOp: 'store',
       }],
-    };
+    });
 
-    const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
     passEncoder.setPipeline(this.pipeline);
     passEncoder.setBindGroup(0, this.bindGroup);
-    passEncoder.draw(3); 
+    passEncoder.draw(3, 1, 0, 0);
     passEncoder.end();
 
     this.device.queue.submit([commandEncoder.finish()]);

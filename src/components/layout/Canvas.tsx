@@ -4,7 +4,6 @@ import { settings } from '../../store/settings';
 import { pipeline } from '../../core/pipeline';
 import { ZoomIn, ZoomOut } from 'lucide-solid';
 
-// Smart Filename Truncation
 const formatFilename = (filename: string | null) => {
   if (!filename) return "No image loaded";
   
@@ -43,7 +42,7 @@ export const Canvas: Component = () => {
   const [pan, setPan] = createSignal({ x: 0, y: 0 });
 
   const [isDragging, setIsDragging] = createSignal(false);
-  const [canvasBg, setCanvasBg] = createSignal('#191919'); // Default canvas background color
+  const [canvasBg, setCanvasBg] = createSignal('#191919'); 
   
   let lastMouse = { x: 0, y: 0 };
 
@@ -73,8 +72,12 @@ export const Canvas: Component = () => {
         for (let entry of entries) {
           const w = entry.contentRect.width;
           const h = entry.contentRect.height;
-          setViewportDim({ w, h });
-          renderer.resize(w, h);
+          
+          // FIX: Apply Device Pixel Ratio to the WebGPU canvas to eliminate pixelation
+          const dpr = window.devicePixelRatio || 1;
+          
+          setViewportDim({ w, h }); // Keep logical pixels for mouse/pan math
+          renderer.resize(Math.floor(w * dpr), Math.floor(h * dpr)); // Physical pixels for GPU
         }
       });
       viewportObserver.observe(viewportRef);
@@ -149,8 +152,6 @@ export const Canvas: Component = () => {
     const zoomFactor = e.ctrlKey ? 0.01 : 0.003; 
     let targetScale = oldScale * (1 - e.deltaY * zoomFactor);
 
-    // FIXED: By changing the threshold exactly to the fit scale without an added margin, 
-    // smooth trackpads can now easily "escape" the 0 zoom state and trigger scaling!
     if (targetScale <= getFitPercent() / 100) {
       setZoom(0); setPan({ x: 0, y: 0 });
       return;
@@ -191,8 +192,6 @@ export const Canvas: Component = () => {
 
   return (
     <main class="flex flex-col flex-1 relative bg-canvas overflow-hidden">
-      
-      {/* Thin Top Navbar - 1.5rem */}
       <div class="h-6 min-h-[1.5rem] max-h-[1.5rem] border-b border-border bg-panel flex items-center px-4 shrink-0 z-20">
         <div class="flex-1"></div>
         <div class="flex items-center gap-2">
@@ -216,8 +215,7 @@ export const Canvas: Component = () => {
         </div>
       </div>
 
-      {/* 5px Canvas Wrapper - Dynamically sets the HTML background color from the squares */}
-      <div class="flex-1 flex p-[5px] overflow-hidden box-border transition-colors duration-200" style={{ "min-height": 0, "min-width": 0, "background-color": canvasBg() }}>
+      <div class="flex-1 flex p-[5px] overflow-hidden box-border transition-colors duration-200" style={{ "background-color": canvasBg() }}>
         <div 
           ref={viewportRef} 
           class={`flex-1 w-full h-full relative overflow-hidden rounded-sm ${isImageLoaded() ? (zoom() === 0 ? 'cursor-default' : (isDragging() ? 'cursor-grabbing' : 'cursor-grab')) : 'cursor-default'}`}
@@ -234,20 +232,13 @@ export const Canvas: Component = () => {
         </div>
       </div>
 
-      {/* Thin Bottom Navbar - 1.5rem */}
       <div class="h-6 min-h-[1.5rem] max-h-[1.5rem] border-t border-border bg-panel flex items-center px-4 shrink-0 z-20 box-border">
-        
-        {/* Left Spacer */}
         <div class="flex-1"></div>
-        
-        {/* Center - Filename */}
         <div class="flex items-center justify-center flex-1">
           <span class="text-[10px] text-icon tracking-wide select-none">
             {formatFilename(fileName())}
           </span>
         </div>
-
-        {/* Right - Color Swatches */}
         <div class="flex-1 flex justify-end items-center gap-1.5">
           <For each={['#191919', '#393939', '#9C9C9C', '#FFFFFF']}>
             {(color) => (
@@ -260,9 +251,7 @@ export const Canvas: Component = () => {
             )}
           </For>
         </div>
-
       </div>
-
     </main>
   );
 };
