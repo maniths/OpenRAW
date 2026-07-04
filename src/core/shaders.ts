@@ -4,7 +4,7 @@ struct Uniforms {
   saturation: f32, vibrance: f32, highlights: f32, shadows: f32,
   whites: f32, blacks: f32,
   uvScaleX: f32, uvScaleY: f32, uvOffsetX: f32, uvOffsetY: f32,
-  pad1: f32, pad2: f32,
+  isRaw: f32, pad2: f32,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -48,7 +48,12 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(0.0, 0.0, 0.0, 0.0);
   }
   
-  var linearColor = pow(color, vec3<f32>(2.2));
+  var linearColor = color;
+  
+  // If the image is sRGB (JPEG/PNG), unpack it to Linear. If it's RAW, bypass this.
+  if (uniforms.isRaw < 0.5) {
+    linearColor = pow(color, vec3<f32>(2.2));
+  }
   
   // White Balance
   let t = uniforms.temperature;
@@ -76,29 +81,23 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
   let highlightRollOff = exp2((hVal / 100.0) * 1.5 * highlightMask);
   linearColor = linearColor * shadowBoost * highlightRollOff;
   
-  // Whites & Blacks (Strict Capture One Extreme Targeting + Asymmetric scaling)
+  // Whites & Blacks
   let wVal = uniforms.whites / 100.0;
   let bVal = uniforms.blacks / 100.0;
   
   let whiteMask = smoothstep(0.75, 1.0, perceptualLuma);
   let blackMask = smoothstep(0.25, 0.0, perceptualLuma);
   
-  // Whites: Max strength is 1.5, but scaled down to 20% (0.3) for negative values
   var wStrength = 1.5;
-  if (wVal < 0.0) {
-    wStrength = 0.3; 
-  }
+  if (wVal < 0.0) { wStrength = 0.3; }
   let whiteMultiplier = exp2(wVal * wStrength * whiteMask);
   
-  // Blacks: Max strength is 0.08, but scaled down to 20% (0.016) for positive values
   var bStrength = 0.08;
-  if (bVal > 0.0) {
-    bStrength = 0.016; 
-  }
+  if (bVal > 0.0) { bStrength = 0.016; }
   let blackOffset = bVal * bStrength * blackMask;
   
   linearColor = (linearColor * whiteMultiplier) + blackOffset;
-  linearColor = max(linearColor, vec3<f32>(0.0)); // Prevent dead pixels
+  linearColor = max(linearColor, vec3<f32>(0.0)); 
   
   // Contrast
   let contrastFactor = (uniforms.contrast / 500.0) + 1.0; 

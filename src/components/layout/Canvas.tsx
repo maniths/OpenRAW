@@ -59,6 +59,7 @@ export const Canvas: Component = () => {
       await renderer.init();
       setIsGpuReady(true);
 
+      // Phase 1: Instant Preview
       pipeline.onImageLoaded((bitmap, name) => {
         setImgDim({ w: bitmap.width, h: bitmap.height });
         setFileName(name);
@@ -68,16 +69,21 @@ export const Canvas: Component = () => {
         renderer.setImage(bitmap);
       });
 
+      // Phase 2: 32-bit Linear Sensor Data Integration
+      pipeline.onRawDataLoaded((width, height, data) => {
+        // We do NOT reset zoom or pan here so the transition is seamless to the user
+        renderer.setRawData(width, height, data);
+      });
+
       viewportObserver = new ResizeObserver((entries) => {
         for (let entry of entries) {
           const w = entry.contentRect.width;
           const h = entry.contentRect.height;
           
-          // FIX: Apply Device Pixel Ratio to the WebGPU canvas to eliminate pixelation
           const dpr = window.devicePixelRatio || 1;
           
-          setViewportDim({ w, h }); // Keep logical pixels for mouse/pan math
-          renderer.resize(Math.floor(w * dpr), Math.floor(h * dpr)); // Physical pixels for GPU
+          setViewportDim({ w, h }); 
+          renderer.resize(Math.floor(w * dpr), Math.floor(h * dpr)); 
         }
       });
       viewportObserver.observe(viewportRef);
