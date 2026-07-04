@@ -124,7 +124,8 @@ export class WebGPURenderer {
     this.uniformsData[3] = settings.tint;
     this.uniformsData[4] = settings.saturation;
     this.uniformsData[5] = settings.vibrance;
-    // Slots 6-10 reserved for highlights/shadows/etc later
+    this.uniformsData[6] = settings.highlights;
+    this.uniformsData[7] = settings.shadows;
     this.updateUniforms();
   }
 
@@ -140,9 +141,9 @@ export class WebGPURenderer {
   private updateUniforms() {
     if (!this.initialized) return;
     
-    // Pack layout-dependent variables at the end
-    this.uniformsData[11] = this.imageAspect;
-    this.uniformsData[12] = this.canvasAspect;
+    // Aligned to slots 8 and 9 to match the WGSL struct exactly
+    this.uniformsData[8] = this.imageAspect;
+    this.uniformsData[9] = this.canvasAspect;
 
     this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformsData);
     this.scheduleRender();

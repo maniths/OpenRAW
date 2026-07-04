@@ -3,7 +3,7 @@ import { createStore } from 'solid-js/store';
 export const [settings, setSettings] = createStore({
   exposure: 0,
   contrast: 0,
-  temperature: 5000, // Default for non-RAW images
+  temperature: 5000, 
   tint: 0,
   highlights: 0,
   shadows: 0,
@@ -15,4 +15,5 @@ export const [settings, setSettings] = createStore({
   dehaze: 0,
   saturation: 0,
   vibrance: 0,
+  fileName: "" 
 });

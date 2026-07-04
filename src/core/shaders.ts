@@ -4,18 +4,21 @@ struct Uniforms {
   contrast: f32,
   temperature: f32,
   tint: f32,
+  
   saturation: f32,
   vibrance: f32,
+  highlights: f32,
+  shadows: f32,
+  
+  imageAspect: f32,
+  canvasAspect: f32,
   pad1: f32,
   pad2: f32,
+  
   pad3: f32,
   pad4: f32,
   pad5: f32,
-  imageAspect: f32,
-  canvasAspect: f32,
   pad6: f32,
-  pad7: f32,
-  pad8: f32,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -67,47 +70,47 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
   // 1. Convert to Linear Space
   var linearColor = pow(color, vec3<f32>(2.2));
   
-  // 2. WHITE BALANCE (Temp & Tint)
-  
-  // Asymmetric Temperature Scaling
-  // Maps 800 -> -0.4 (Max Blue) and 14000 -> +0.4 (Max Red)
+  // 2. WHITE BALANCE
   let t = uniforms.temperature;
   var tempOffset: f32;
-  if (t < 5000.0) {
-    tempOffset = (t - 5000.0) / 10500.0; 
-  } else {
-    tempOffset = (t - 5000.0) / 22500.0; 
-  }
+  if (t < 5000.0) { tempOffset = (t - 5000.0) / 10500.0; } else { tempOffset = (t - 5000.0) / 22500.0; }
 
-  // Asymmetric Tint Scaling
-  // Keeps Green at full strength (-1.0), clamps Magenta to former +60 visual strength (+0.4)
   let tint = uniforms.tint;
   var tintOffset: f32;
-  if (tint < 0.0) {
-    tintOffset = tint / 150.0; 
-  } else {
-    tintOffset = tint / 375.0; 
-  }
+  if (tint < 0.0) { tintOffset = tint / 150.0; } else { tintOffset = tint / 375.0; }
   
-  var wbAdjust = vec3<f32>(
-    1.0 + tempOffset,                   // Red shift
-    1.0 - tintOffset,                   // Green shift
-    1.0 - tempOffset                    // Blue shift
-  );
+  var wbAdjust = vec3<f32>(1.0 + tempOffset, 1.0 - tintOffset, 1.0 - tempOffset);
   linearColor = linearColor * max(wbAdjust, vec3<f32>(0.0));
   
-  // 3. EXPOSURE & CONTRAST
+  // 3. EXPOSURE
   linearColor = linearColor * exp2(uniforms.exposure);
+  
+  // 4. HIGHLIGHTS & SHADOWS
+  let luma = dot(linearColor, LUMA);
+  let perceptualLuma = pow(max(luma, 0.0001), 1.0 / 2.2);
+  
+  let shadowMask = pow(1.0 - clamp(perceptualLuma, 0.0, 1.0), 3.0);
+  let highlightMask = pow(clamp(perceptualLuma, 0.0, 1.0), 3.0);
+  
+  let shadowBoost = exp2((uniforms.shadows / 100.0) * 1.5 * shadowMask);
+  
+  // Map -100 to the visual strength of the old -60 (0.6 multiplier)
+  var hVal = uniforms.highlights;
+  if (hVal < 0.0) { hVal = hVal * 0.6; }
+  let highlightRollOff = exp2((hVal / 100.0) * 1.5 * highlightMask);
+  
+  linearColor = linearColor * shadowBoost * highlightRollOff;
+  
+  // 5. CONTRAST
   let contrastFactor = (uniforms.contrast / 500.0) + 1.0; 
   linearColor = (linearColor - 0.18) * contrastFactor + 0.18;
   
-  // 4. SATURATION
+  // 6. SATURATION
   let satMultiplier = (uniforms.saturation + 100.0) / 100.0;
-  let luminance = dot(linearColor, LUMA);
-  var grayscale = vec3<f32>(luminance);
+  var grayscale = vec3<f32>(dot(linearColor, LUMA));
   linearColor = mix(grayscale, linearColor, satMultiplier);
 
-  // 5. VIBRANCE
+  // 7. VIBRANCE
   let maxChannel = max(linearColor.r, max(linearColor.g, linearColor.b));
   let minChannel = min(linearColor.r, min(linearColor.g, linearColor.b));
   let currentSaturation = maxChannel - minChannel; 
@@ -117,10 +120,8 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
   
   linearColor = mix(linearColor, mix(grayscale, linearColor, 2.0), vibMultiplier * vibMask);
   
-  // Clamp before converting back to sRGB
+  // Clamp and convert back to sRGB display space
   linearColor = clamp(linearColor, vec3<f32>(0.0), vec3<f32>(1.0));
-  
-  // 6. Convert back to sRGB
   color = pow(linearColor, vec3<f32>(1.0 / 2.2));
   
   return vec4<f32>(color, 1.0);
