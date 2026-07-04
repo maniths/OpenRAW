@@ -4,6 +4,27 @@ import { settings } from '../../store/settings';
 import { pipeline } from '../../core/pipeline';
 import { ZoomIn, ZoomOut } from 'lucide-solid';
 
+// Smart Filename Truncation (e.g. thisisaextremply...erday.cr3)
+const formatFilename = (filename: string | null) => {
+  if (!filename) return "No image loaded";
+  
+  const maxLength = 35; 
+  if (filename.length <= maxLength) return filename;
+  
+  const extIndex = filename.lastIndexOf(".");
+  if (extIndex === -1) {
+    return filename.substring(0, 25) + "...";
+  }
+  
+  const ext = filename.substring(extIndex);
+  const name = filename.substring(0, extIndex);
+  
+  const startChunk = name.substring(0, 16);
+  const endChunk = name.substring(name.length - 5);
+  
+  return `${startChunk}...${endChunk}${ext}`;
+};
+
 export const Canvas: Component = () => {
   let canvasRef!: HTMLCanvasElement;
   let viewportRef!: HTMLDivElement;
@@ -13,21 +34,22 @@ export const Canvas: Component = () => {
   
   const [isGpuReady, setIsGpuReady] = createSignal(false);
   const [isImageLoaded, setIsImageLoaded] = createSignal(false);
+  const [fileName, setFileName] = createSignal<string | null>(null);
+  
   const [imgDim, setImgDim] = createSignal({ w: 1, h: 1 });
   const [viewportDim, setViewportDim] = createSignal({ w: 1, h: 1 });
 
-  const [zoom, setZoom] = createSignal(0); // 0 = Fit, Otherwise precise %
+  const [zoom, setZoom] = createSignal(0); 
   const [pan, setPan] = createSignal({ x: 0, y: 0 });
 
   const [isDragging, setIsDragging] = createSignal(false);
   let lastMouse = { x: 0, y: 0 };
 
-  // Calculate the exact 5px margin "Fit" percentage dynamically
   const getFitPercent = () => {
     const vW = viewportDim().w, vH = viewportDim().h;
     const iW = imgDim().w, iH = imgDim().h;
     if (vW <= 1 || iW <= 1) return 100;
-    return Math.min((vW - 10) / iW, (vH - 10) / iH) * 100; // 5px pad each side = 10px total
+    return Math.min(vW / iW, vH / iH) * 100; 
   };
 
   onMount(async () => {
@@ -36,15 +58,15 @@ export const Canvas: Component = () => {
       await renderer.init();
       setIsGpuReady(true);
 
-      pipeline.onImageLoaded((bitmap) => {
+      pipeline.onImageLoaded((bitmap, name) => {
         setImgDim({ w: bitmap.width, h: bitmap.height });
+        setFileName(name);
         setIsImageLoaded(true);
         setZoom(0);
         setPan({ x: 0, y: 0 });
         renderer.setImage(bitmap);
       });
 
-      // The canvas perfectly mirrors the viewport bounds (No scrollbars ever)
       viewportObserver = new ResizeObserver((entries) => {
         for (let entry of entries) {
           const w = entry.contentRect.width;
@@ -55,7 +77,6 @@ export const Canvas: Component = () => {
       });
       viewportObserver.observe(viewportRef);
 
-      // Bind native wheel for trackpad zoom
       viewportRef.addEventListener('wheel', handleWheel, { passive: false });
 
     } catch (error) {
@@ -68,7 +89,6 @@ export const Canvas: Component = () => {
     if (viewportRef) viewportRef.removeEventListener('wheel', handleWheel);
   });
 
-  // --- CORE CAMERA ENGINE (Calculates GPU Uniforms) ---
   createEffect(() => {
     if (!isGpuReady() || !isImageLoaded()) return;
     
@@ -76,12 +96,10 @@ export const Canvas: Component = () => {
     const iW = imgDim().w, iH = imgDim().h;
     if (vW <= 1 || iW <= 1) return;
 
-    // Apply scale and offsets
     const scale = zoom() === 0 ? getFitPercent() / 100 : zoom() / 100;
     const centerX = vW / 2 + pan().x - (iW * scale) / 2;
     const centerY = vH / 2 + pan().y - (iH * scale) / 2;
 
-    // Convert Screen Space to Normalized Texture UV Space
     const uvScaleX = vW / (iW * scale);
     const uvScaleY = vH / (iH * scale);
     const uvOffsetX = -centerX / (iW * scale);
@@ -94,7 +112,6 @@ export const Canvas: Component = () => {
     if (isGpuReady()) renderer.updateSettings(settings);
   });
 
-  // --- ZOOM BUTTON LOGIC (50% Steps) ---
   const handleZoomIn = () => {
     let current = zoom() === 0 ? getFitPercent() : zoom();
     let next = Math.floor(current / 50) * 50 + 50;
@@ -122,13 +139,12 @@ export const Canvas: Component = () => {
     }
   };
 
-  // --- WHEEL TO ZOOM TO CURSOR ---
   const handleWheel = (e: WheelEvent) => {
     e.preventDefault();
     if (!isImageLoaded()) return;
 
     const oldScale = zoom() === 0 ? getFitPercent() / 100 : zoom() / 100;
-    const zoomFactor = e.ctrlKey ? 0.01 : 0.003; // Smooth sensitivity
+    const zoomFactor = e.ctrlKey ? 0.01 : 0.003; 
     let targetScale = oldScale * (1 - e.deltaY * zoomFactor);
 
     if (targetScale <= getFitPercent() / 100 + 0.01) {
@@ -144,7 +160,6 @@ export const Canvas: Component = () => {
     const vW = viewportDim().w, vH = viewportDim().h;
     const iW = imgDim().w, iH = imgDim().h;
 
-    // Keep pixel under cursor locked in place
     const imageX = (mouseX - (vW / 2 + pan().x - (iW * oldScale) / 2)) / oldScale;
     const imageY = (mouseY - (vH / 2 + pan().y - (iH * oldScale) / 2)) / oldScale;
     const newPx = mouseX - imageX * targetScale - vW / 2 + (iW * targetScale) / 2;
@@ -154,7 +169,6 @@ export const Canvas: Component = () => {
     setZoom(targetScale * 100);
   };
 
-  // --- PAN DRAG LOGIC ---
   const onMouseDown = (e: MouseEvent) => {
     if (e.button !== 0 || zoom() === 0) return;
     setIsDragging(true);
@@ -184,7 +198,6 @@ export const Canvas: Component = () => {
           <button class="text-icon hover:text-primary transition-colors focus:outline-none" onClick={handleZoomOut}>
             <ZoomOut size={16}/>
           </button>
-          {/* Slider automatically dynamically adjusts minimum based on Fit % */}
           <input 
             type="range" 
             min={getFitPercent()} 
@@ -199,26 +212,28 @@ export const Canvas: Component = () => {
         </div>
       </div>
 
-      {/* Hardware Camera Viewport (No scrollbars, 100% full stretch) */}
-      <div 
-        ref={viewportRef} 
-        class={`flex-1 relative overflow-hidden bg-canvas ${isImageLoaded() ? (zoom() === 0 ? 'cursor-default' : (isDragging() ? 'cursor-grabbing' : 'cursor-grab')) : 'cursor-default'}`}
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
-        onMouseLeave={onMouseUp}
-      >
-        <canvas 
-          ref={canvasRef} 
-          class="absolute inset-0 w-full h-full block pointer-events-none" 
-          style={{ opacity: isImageLoaded() ? 1 : 0 }}
-        />
+      {/* 5px Canvas Wrapper - min-h-0 and min-w-0 forces flexbox to not stretch past the screen! */}
+      <div class="flex-1 flex p-[5px] overflow-hidden box-border" style={{ "min-height": 0, "min-width": 0 }}>
+        <div 
+          ref={viewportRef} 
+          class={`flex-1 w-full h-full relative overflow-hidden rounded-sm ${isImageLoaded() ? (zoom() === 0 ? 'cursor-default' : (isDragging() ? 'cursor-grabbing' : 'cursor-grab')) : 'cursor-default'}`}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={onMouseUp}
+          onMouseLeave={onMouseUp}
+        >
+          <canvas 
+            ref={canvasRef} 
+            class="absolute inset-0 w-full h-full block pointer-events-none" 
+            style={{ opacity: isImageLoaded() ? 1 : 0 }}
+          />
+        </div>
       </div>
 
-      {/* Thin Bottom Navbar */}
-      <div class="h-8 border-t border-border bg-panel flex items-center justify-center px-4 shrink-0 z-20">
-        <span class="text-[11px] text-icon tracking-wide truncate max-w-[80%]">
-          {settings.fileName || "No image loaded"}
+      {/* Thin Bottom Navbar - Forced to exactly 1.5rem (h-6) */}
+      <div class="h-6 min-h-[1.5rem] max-h-[1.5rem] border-t border-border bg-panel flex items-center justify-center px-4 shrink-0 z-20 box-border">
+        <span class="text-[11px] text-icon tracking-wide select-none">
+          {formatFilename(fileName())}
         </span>
       </div>
 

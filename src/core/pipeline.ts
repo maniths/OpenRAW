@@ -1,4 +1,4 @@
-type PipelineCallback = (bitmap: ImageBitmap) => void;
+type PipelineCallback = (bitmap: ImageBitmap, filename: string) => void;
 
 class ImagePipeline {
   private listeners: PipelineCallback[] = [];
@@ -15,7 +15,7 @@ class ImagePipeline {
       const bitmap = await createImageBitmap(file);
       console.log(`[Pipeline] Decoded: ${bitmap.width}x${bitmap.height}`);
       
-      this.listeners.forEach(cb => cb(bitmap));
+      this.listeners.forEach(cb => cb(bitmap, file.name));
     } catch (err) {
       console.error("[Pipeline] Failed to decode image:", err);
     }
